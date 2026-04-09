@@ -16,10 +16,14 @@ jobs:
         with:
           node-version: 22
 
-      - run: npm ci --omit=dev
+      - uses: aws-actions/setup-sam@v2
+
+      - name: SAM build
+        run: sam build
 
       - name: Package Lambda zip
-        run: zip -r lambda.zip index.mjs node_modules/
+        working-directory: .aws-sam/build/FulfillmentFunction
+        run: zip -r "$GITHUB_WORKSPACE/lambda.zip" .
 
       - name: Upload zip to release
         env:
