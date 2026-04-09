@@ -184,4 +184,179 @@ describe("handler", () => {
     assert.equal(result.statusCode, 500);
     assert.match(JSON.parse(result.body).message, /Internal server error/);
   });
+
+  // ---- Scenario 2: POST redirect includes token, customer ID is persisted in redirect ----
+  it("redirect URL contains all required customer params for onboarding", async () => {
+    sendMeteringMock.mock.mockImplementation(async () => ({
+      CustomerIdentifier: "cust-onboard",
+      CustomerAWSAccountId: "999988887777",
+      ProductCode: "prod-test123",
+    }));
+
+    sendEntitlementMock.mock.mockImplementation(async () => ({
+      Entitlements: [{ Dimension: "Seats", Value: { IntegerValue: 10 } }],
+    }));
+
+    const result = await handler(
+      makeEvent("x-amzn-marketplace-token=tok_onboard")
+    );
+
+    assert.equal(result.statusCode, 302);
+    const location = new URL(result.headers.Location);
+    // All three params must be present for the downstream app to onboard the customer
+    assert.ok(location.searchParams.has("customerId"));
+    assert.ok(location.searchParams.has("awsAccountId"));
+    assert.ok(location.searchParams.has("productCode"));
+    assert.equal(location.searchParams.get("customerId"), "cust-onboard");
+    assert.equal(location.searchParams.get("awsAccountId"), "999988887777");
+    assert.equal(location.searchParams.get("productCode"), "prod-test123");
+  });
+
+  // ---- Scenario 4: GetEntitlements returns undefined Entitlements array ----
+  it("returns 403 when Entitlements key is missing from response", async () => {
+    sendMeteringMock.mock.mockImplementation(async () => ({
+      CustomerIdentifier: "cust-undef",
+      CustomerAWSAccountId: "000000000000",
+      ProductCode: "prod-test123",
+    }));
+
+    sendEntitlementMock.mock.mockImplementation(async () => ({}));
+
+    const result = await handler(
+      makeEvent("x-amzn-marketplace-token=tok_undef")
+    );
+
+    assert.equal(result.statusCode, 403);
+    assert.match(JSON.parse(result.body).message, /No active entitlements/);
+  });
+
+  // ---- Scenario 5a: Subscription change – customer has multiple entitlements ----
+  it("allows access with multiple entitlements (upgraded subscription)", async () => {
+    sendMeteringMock.mock.mockImplementation(async () => ({
+      CustomerIdentifier: "cust-multi",
+      CustomerAWSAccountId: "111111111111",
+      ProductCode: "prod-test123",
+    }));
+
+    sendEntitlementMock.mock.mockImplementation(async () => ({
+      Entitlements: [
+        { Dimension: "Users", Value: { IntegerValue: 5 } },
+        { Dimension: "Storage", Value: { IntegerValue: 100 } },
+        { Dimension: "Premium", Value: { IntegerValue: 1 } },
+      ],
+    }));
+
+    const result = await handler(
+      makeEvent("x-amzn-marketplace-token=tok_multi")
+    );
+
+    assert.equal(result.statusCode, 302);
+    assert.ok(result.headers.Location);
+  });
+
+  // ---- Scenario 5b: Subscription change – customer unsubscribed (no entitlements) ----
+  it("denies access when subscription is cancelled (unsubscribe)", async () => {
+    sendMeteringMock.mock.mockImplementation(async () => ({
+      CustomerIdentifier: "cust-unsub",
+      CustomerAWSAccountId: "222222222222",
+      ProductCode: "prod-test123",
+    }));
+
+    sendEntitlementMock.mock.mockImplementation(async () => ({
+      Entitlements: [],
+    }));
+
+    const result = await handler(
+      makeEvent("x-amzn-marketplace-token=tok_unsub")
+    );
+
+    assert.equal(result.statusCode, 403);
+    assert.match(JSON.parse(result.body).message, /No active entitlements/);
+  });
+
+  // ---- Scenario 5c: Subscription change – entitlement service error (failed subscription) ----
+  it("returns 500 when GetEntitlements fails (subscription verification failure)", async () => {
+    sendMeteringMock.mock.mockImplementation(async () => ({
+      CustomerIdentifier: "cust-fail",
+      CustomerAWSAccountId: "333333333333",
+      ProductCode: "prod-test123",
+    }));
+
+    sendEntitlementMock.mock.mockImplementation(async () => {
+      throw new Error("EntitlementService unavailable");
+    });
+
+    const result = await handler(
+      makeEvent("x-amzn-marketplace-token=tok_fail")
+    );
+
+    assert.equal(result.statusCode, 500);
+    assert.match(JSON.parse(result.body).message, /Internal server error/);
+  });
+
+  // ---- Edge case: body is undefined ----
+  it("returns 400 when event body is undefined", async () => {
+    const result = await handler({ isBase64Encoded: false });
+
+    assert.equal(result.statusCode, 400);
+    assert.match(JSON.parse(result.body).message, /Missing registration token/);
+  });
+
+  // ---- Edge case: body is not a string (object) ----
+  it("returns 400 when event body is not a string", async () => {
+    const result = await handler({ body: 12345, isBase64Encoded: false });
+
+    assert.equal(result.statusCode, 400);
+  });
+
+  // ---- Edge case: token alongside other form parameters ----
+  it("extracts token correctly when other params are present", async () => {
+    sendMeteringMock.mock.mockImplementation(async () => ({
+      CustomerIdentifier: "cust-mixed",
+      CustomerAWSAccountId: "555566667777",
+      ProductCode: "prod-test123",
+    }));
+
+    sendEntitlementMock.mock.mockImplementation(async () => ({
+      Entitlements: [{ Dimension: "Users", Value: { IntegerValue: 1 } }],
+    }));
+
+    const result = await handler(
+      makeEvent("foo=bar&x-amzn-marketplace-token=tok_mixed&baz=qux")
+    );
+
+    assert.equal(result.statusCode, 302);
+    const location = new URL(result.headers.Location);
+    assert.equal(location.searchParams.get("customerId"), "cust-mixed");
+  });
+
+  // ---- Test mode: disabled when ALLOW_TEST_MODE is not "true" ----
+  it("does not activate test mode when ALLOW_TEST_MODE is false", async () => {
+    // ALLOW_TEST_MODE was not set to "true" before import, so test mode is disabled
+    const result = await handler({ testMode: true });
+
+    // Should fall through to normal flow and fail due to missing token
+    assert.equal(result.statusCode, 400);
+  });
+
+  // ---- Scenario 6: GetEntitlements is called with correct ProductCode and customer filter ----
+  it("calls GetEntitlements with the correct ProductCode and customer filter", async () => {
+    sendMeteringMock.mock.mockImplementation(async () => ({
+      CustomerIdentifier: "cust-verify",
+      CustomerAWSAccountId: "888899990000",
+      ProductCode: "prod-test123",
+    }));
+
+    sendEntitlementMock.mock.mockImplementation(async (cmd) => ({
+      Entitlements: [{ Dimension: "Users", Value: { IntegerValue: 2 } }],
+    }));
+
+    await handler(makeEvent("x-amzn-marketplace-token=tok_verify"));
+
+    assert.equal(sendEntitlementMock.mock.callCount(), 1);
+    const call = sendEntitlementMock.mock.calls[0];
+    const input = call.arguments[0].input;
+    assert.equal(input.ProductCode, "prod-test123");
+    assert.deepEqual(input.Filter, { CUSTOMER_IDENTIFIER: ["cust-verify"] });
+  });
 });
