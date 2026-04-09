@@ -9,6 +9,11 @@ Parameters:
   ProductCode:
     Type: String
     Description: AWS Marketplace Product Code for your SaaS listing
+  AllowTestMode:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Set to true to enable direct-invoke test mode (do not enable in production)
 
 Globals:
   Function:
@@ -26,6 +31,7 @@ Resources:
         Variables:
           REDIRECT_URL: !Ref RedirectUrl
           PRODUCT_CODE: !Ref ProductCode
+          ALLOW_TEST_MODE: !Ref AllowTestMode
       Policies:
         - Version: "2012-10-17"
           Statement:

@@ -10,6 +10,7 @@ const entitlementClient = new MarketplaceEntitlementServiceClient({});
 
 const REDIRECT_URL = process.env.REDIRECT_URL;
 const PRODUCT_CODE = process.env.PRODUCT_CODE;
+const ALLOW_TEST_MODE = process.env.ALLOW_TEST_MODE === "true";
 
 /**
  * AWS Marketplace SaaS Contract Fulfillment Lambda
@@ -20,9 +21,48 @@ const PRODUCT_CODE = process.env.PRODUCT_CODE;
  * 2. We call ResolveCustomer to exchange the token for customer details.
  * 3. We call GetEntitlements to verify the customer's contract/entitlements.
  * 4. We redirect the customer to the REDIRECT_URL with query params.
+ *
+ * Test mode (direct invoke only):
+ *   Send { "testMode": true } to skip ResolveCustomer and use mock data.
+ *   Requires ALLOW_TEST_MODE=true environment variable.
  */
 export const handler = async (event) => {
   try {
+    // --- Test mode: direct Lambda invoke with mock data ---
+    if (event.testMode && ALLOW_TEST_MODE) {
+      console.log("TEST MODE: skipping ResolveCustomer, using mock data");
+
+      const customerId = event.customerId || "test-customer-id";
+      const awsAccountId = event.awsAccountId || "123456789012";
+      const productCode = event.productCode || PRODUCT_CODE;
+
+      // Still call GetEntitlements to verify that path works
+      console.log("Fetching entitlements…");
+      const entitlementResult = await entitlementClient.send(
+        new GetEntitlementsCommand({
+          ProductCode: productCode,
+          Filter: {
+            CUSTOMER_IDENTIFIER: [customerId],
+          },
+        })
+      );
+
+      const entitlements = entitlementResult.Entitlements || [];
+      console.log(`Found ${entitlements.length} entitlement(s)`, JSON.stringify(entitlements));
+
+      const redirectTarget = new URL(REDIRECT_URL);
+      redirectTarget.searchParams.set("customerId", customerId);
+      redirectTarget.searchParams.set("awsAccountId", awsAccountId);
+      redirectTarget.searchParams.set("productCode", productCode);
+
+      return {
+        statusCode: 302,
+        headers: { Location: redirectTarget.toString() },
+        body: "",
+        _testMode: true,
+      };
+    }
+
     // --- 1. Extract the marketplace token from the POST body ---
     const body =
       typeof event.body === "string"
