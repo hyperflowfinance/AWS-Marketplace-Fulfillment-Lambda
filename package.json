@@ -4,7 +4,7 @@
   "description": "AWS Lambda to handle AWS Marketplace SaaS contract fulfillment redirect",
   "main": "index.mjs",
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --experimental-test-module-mocks --test test/index.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-marketplace-metering": "^3.0.0",
