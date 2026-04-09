@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: AWS Marketplace SaaS Contract Fulfillment Lambda
+
+Parameters:
+  RedirectUrl:
+    Type: String
+    Description: URL to redirect the customer to after successful fulfillment
+  ProductCode:
+    Type: String
+    Description: AWS Marketplace Product Code for your SaaS listing
+
+Globals:
+  Function:
+    Timeout: 15
+    Runtime: nodejs20.x
+
+Resources:
+  FulfillmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      CodeUri: .
+      MemorySize: 256
+      Environment:
+        Variables:
+          REDIRECT_URL: !Ref RedirectUrl
+          PRODUCT_CODE: !Ref ProductCode
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - aws-marketplace:ResolveCustomer
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - aws-marketplace:GetEntitlements
+              Resource: "*"
+      Events:
+        MarketplacePost:
+          Type: Api
+          Properties:
+            Path: /fulfill
+            Method: POST
+
+Outputs:
+  FulfillmentApiUrl:
+    Description: Fulfillment URL to set in your AWS Marketplace SaaS listing
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/fulfill"
