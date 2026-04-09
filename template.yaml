@@ -20,7 +20,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      CodeUri: .
+      CodeUri: src/
       MemorySize: 256
       Environment:
         Variables:

@@ -36,7 +36,7 @@ mock.module("@aws-sdk/client-marketplace-entitlement-service", {
 process.env.REDIRECT_URL = "https://example.com/welcome";
 process.env.PRODUCT_CODE = "prod-test123";
 
-const { handler } = await import("../index.mjs");
+const { handler } = await import("../src/index.mjs");
 
 // --- Helpers ---
 function makeEvent(body, isBase64Encoded = false) {

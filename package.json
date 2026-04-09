@@ -2,7 +2,7 @@
   "name": "marketplace-welcome-lambda",
   "version": "1.0.0",
   "description": "AWS Lambda to handle AWS Marketplace SaaS contract fulfillment redirect",
-  "main": "index.mjs",
+  "main": "src/index.mjs",
   "scripts": {
     "test": "node --experimental-test-module-mocks --test test/index.test.mjs"
   },
