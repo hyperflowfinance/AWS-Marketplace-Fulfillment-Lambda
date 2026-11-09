@@ -14,6 +14,10 @@ Parameters:
     Default: "false"
     AllowedValues: ["true", "false"]
     Description: Set to true to enable direct-invoke test mode (do not enable in production)
+  SigningSecret:
+    Type: String
+    NoEcho: true
+    Description: HMAC secret shared with dashboard-api (MARKETPLACE_TOKEN_SECRET)
 
 Globals:
   Function:
@@ -32,6 +36,7 @@ Resources:
           REDIRECT_URL: !Ref RedirectUrl
           PRODUCT_CODE: !Ref ProductCode
           ALLOW_TEST_MODE: !Ref AllowTestMode
+          SIGNING_SECRET: !Ref SigningSecret
       Policies:
         - Version: "2012-10-17"
           Statement:
