@@ -114,7 +114,7 @@ describe("test mode (ALLOW_TEST_MODE=true)", () => {
   });
 
   it("still redirects even with zero entitlements in test mode", async () => {
-    // Test mode skips the entitlement count check ג€” it always redirects
+    // Test mode skips the entitlement count check — it always redirects
     sendEntitlementMock.mock.mockImplementation(async () => ({
       Entitlements: [],
     }));

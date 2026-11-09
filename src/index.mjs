@@ -42,7 +42,7 @@ export const handler = async (event) => {
       const productCode = event.productCode || PRODUCT_CODE;
 
       // Still call GetEntitlements to verify that path works
-      console.log("Fetching entitlementsג€¦");
+      console.log("Fetching entitlements…");
       const entitlementResult = await entitlementClient.send(
         new GetEntitlementsCommand({
           ProductCode: productCode,
@@ -75,7 +75,7 @@ export const handler = async (event) => {
     }
 
     // --- 2. Resolve the customer ---
-    console.log("Resolving customer tokenג€¦");
+    console.log("Resolving customer token…");
     const resolveResult = await meteringClient.send(
       new ResolveCustomerCommand({ RegistrationToken: token })
     );
@@ -93,7 +93,7 @@ export const handler = async (event) => {
     });
 
     // --- 3. Get entitlements for the customer ---
-    console.log("Fetching entitlementsג€¦");
+    console.log("Fetching entitlements…");
     const entitlementResult = await entitlementClient.send(
       new GetEntitlementsCommand({
         ProductCode: PRODUCT_CODE || productCode,

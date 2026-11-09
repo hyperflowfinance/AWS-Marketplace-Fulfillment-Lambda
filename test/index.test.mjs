@@ -236,7 +236,7 @@ describe("handler", () => {
     assert.match(JSON.parse(result.body).message, /No active entitlements/);
   });
 
-  // ---- Scenario 5a: Subscription change ׳’ג‚¬ג€ customer has multiple entitlements ----
+  // ---- Scenario 5a: Subscription change – customer has multiple entitlements ----
   it("allows access with multiple entitlements (upgraded subscription)", async () => {
     sendMeteringMock.mock.mockImplementation(async () => ({
       CustomerIdentifier: "cust-multi",
@@ -260,7 +260,7 @@ describe("handler", () => {
     assert.ok(result.headers.Location);
   });
 
-  // ---- Scenario 5b: Subscription change ׳’ג‚¬ג€ customer unsubscribed (no entitlements) ----
+  // ---- Scenario 5b: Subscription change – customer unsubscribed (no entitlements) ----
   it("denies access when subscription is cancelled (unsubscribe)", async () => {
     sendMeteringMock.mock.mockImplementation(async () => ({
       CustomerIdentifier: "cust-unsub",
@@ -280,7 +280,7 @@ describe("handler", () => {
     assert.match(JSON.parse(result.body).message, /No active entitlements/);
   });
 
-  // ---- Scenario 5c: Subscription change ׳’ג‚¬ג€ entitlement service error (failed subscription) ----
+  // ---- Scenario 5c: Subscription change – entitlement service error (failed subscription) ----
   it("returns 500 when GetEntitlements fails (subscription verification failure)", async () => {
     sendMeteringMock.mock.mockImplementation(async () => ({
       CustomerIdentifier: "cust-fail",
