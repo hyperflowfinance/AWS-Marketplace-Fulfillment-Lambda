@@ -9,7 +9,10 @@ on:
         description: Existing release tag to build and publish
         required: true
         type: string
-
+      ticket_key:
+        description: Jira/internal ticket key, for example DO-123
+        required: false
+        type: string
 jobs:
   build-publish-and-open-infra-pr:
     runs-on: ubuntu-latest
@@ -18,6 +21,7 @@ jobs:
       id-token: write
     env:
       RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+      TICKET_TEXT: ${{ github.event_name == 'release' && github.event.release.body || inputs.ticket_key }}
       ARTIFACT_BUCKET: hf-marketplace-fulfillment-artifacts-222369475058-use1
     steps:
       - uses: actions/checkout@v5
@@ -26,23 +30,17 @@ jobs:
         with:
           ref: ${{ env.RELEASE_TAG }}
           path: app-source
-
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-
       - run: npm ci
         working-directory: app-source
-
       - run: npm test
         working-directory: app-source
-
       - uses: aws-actions/setup-sam@v2
-
       - name: SAM build
         run: sam build
         working-directory: app-source
-
       - name: Package Lambda zip
         working-directory: app-source/.aws-sam/build/FulfillmentFunction
         run: zip -r "$GITHUB_WORKSPACE/lambda.zip" .
@@ -82,10 +80,12 @@ jobs:
           path: infra-shared
 
       - name: Update stage artifact pin
+        id: pin
         env:
           VERSION_ID: ${{ steps.artifact.outputs.version_id }}
           ARTIFACT_KEY: ${{ steps.artifact.outputs.key }}
           ARTIFACT_SHA256: ${{ steps.artifact.outputs.sha256 }}
+          TICKET_TEXT: ${{ env.TICKET_TEXT }}
         run: bash scripts/update-infra-artifact-pin.sh
 
       - name: Open stage deployment PR
@@ -95,5 +95,5 @@ jobs:
           path: infra-shared
           branch: deploy/marketplace-fulfillment-${{ env.RELEASE_TAG }}
           delete-branch: true
-          title: Deploy Marketplace Fulfillment ${{ env.RELEASE_TAG }} to stage
-          body: Update the stage Lambda to the ZIP built from `${{ env.RELEASE_TAG }}`.
+          title: "${{ steps.pin.outputs.ticket_key }}: Deploy Marketplace Fulfillment ${{ env.RELEASE_TAG }} to stage"
+          body: "${{ steps.pin.outputs.ticket_key }}: Update the stage Lambda to the ZIP built from `${{ env.RELEASE_TAG }}`."
