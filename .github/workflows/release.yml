@@ -21,24 +21,30 @@ jobs:
       ARTIFACT_BUCKET: hf-marketplace-fulfillment-artifacts-222369475058-use1
     steps:
       - uses: actions/checkout@v5
+      - name: Checkout release source
+        uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+          ref: ${{ env.RELEASE_TAG }}
+          path: app-source
 
       - uses: actions/setup-node@v5
         with:
           node-version: 22
 
       - run: npm ci
+        working-directory: app-source
 
       - run: npm test
+        working-directory: app-source
 
       - uses: aws-actions/setup-sam@v2
 
       - name: SAM build
         run: sam build
+        working-directory: app-source
 
       - name: Package Lambda zip
-        working-directory: .aws-sam/build/FulfillmentFunction
+        working-directory: app-source/.aws-sam/build/FulfillmentFunction
         run: zip -r "$GITHUB_WORKSPACE/lambda.zip" .
 
       - name: Upload zip to GitHub Release
