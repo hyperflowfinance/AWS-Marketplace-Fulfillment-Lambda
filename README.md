@@ -5,7 +5,7 @@ Handles the fulfillment redirect when a customer subscribes to your SaaS product
 ## Flow
 
 1. Customer clicks **Subscribe** on your Marketplace listing.
-2. AWS Marketplace POST-redirects them to this Lambda (via API Gateway) with an `x-amzn-marketplace-token`.
+2. AWS Marketplace POST-redirects them to this Lambda Function URL with an `x-amzn-marketplace-token`.
 3. Lambda calls **ResolveCustomer** to get the customer ID and AWS account.
 4. Lambda calls **GetEntitlements** to verify the contract is active.
 5. Lambda **302-redirects** the customer to `REDIRECT_URL#marketplace=<token>`. The token is `base64url(JSON {customerId, awsAccountId, productCode, exp}).base64url(HMAC-SHA256)`, valid 1 hour; dashboard-api verifies it at signup.
@@ -19,23 +19,20 @@ Handles the fulfillment redirect when a customer subscribes to your SaaS product
 | `SIGNING_SECRET` | HMAC secret; must equal dashboard-api `MARKETPLACE_TOKEN_SECRET` |
 | `ALLOW_TEST_MODE` | `true` enables direct-invoke test mode; keep `false` in prod |
 
-## Deploy with SAM
+## Build and Deploy
 
-```bash
-npm install
-
-sam build
-sam deploy --guided \
-  --parameter-overrides \
-    RedirectUrl=https://app.example.com/signup \
-    ProductCode=your-product-code \
-    SigningSecret=<shared-secret>
-```
-
-After deployment the output `FulfillmentApiUrl` is the URL you set as the **Fulfillment URL** in your AWS Marketplace listing.
+The release workflow runs tests, builds the SAM package, and publishes the ZIP. It does not deploy the Lambda directly. Deployment is controlled by the approved Terragrunt workflow in `infra-shared`; see [Release to Stage](#release-to-stage).
 
 ## IAM Permissions
 
 The SAM template grants the Lambda these permissions:
 - `aws-marketplace:ResolveCustomer`
 - `aws-marketplace:GetEntitlements`
+
+## Release to Stage
+
+Publishing a `v*` GitHub Release runs tests, builds `lambda.zip`, publishes it to the release and to the versioned stage artifact bucket, then opens a PR in `infra-shared` updating the stage artifact pin. Merge that PR and deploy the `marketplace-fulfillment` component in `stage/us-east-1` to release the code.
+
+Include a valid ticket key such as `DO-123` in release notes, or provide it in the Release workflow's `ticket_key` input when running manually. The workflow adds the key to both the PR title and body.
+
+To publish an existing release, run the **Release** workflow manually with its tag after the artifact bucket is provisioned. The workflow needs `INFRA_PR_APP_ID` and `INFRA_PR_APP_PRIVATE_KEY` secrets for a GitHub App installed on `infra-shared` with Contents and Pull requests write access.
