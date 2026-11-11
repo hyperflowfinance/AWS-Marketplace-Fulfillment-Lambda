@@ -31,4 +31,6 @@ The SAM template grants the Lambda these permissions:
 
 Publishing a `v*` GitHub Release runs tests, builds `lambda.zip`, publishes it to the release and to the versioned stage artifact bucket, then opens a PR in `infra-shared` updating the stage artifact pin. Merge that PR and deploy the `marketplace-fulfillment` component in `stage/us-east-1` to release the code.
 
+Include a valid ticket key such as `DO-123` in release notes, or provide it in the Release workflow's `ticket_key` input when running manually. The workflow adds the key to both the PR title and body.
+
 To publish an existing release, run the **Release** workflow manually with its tag after the artifact bucket is provisioned. The workflow needs `INFRA_PR_APP_ID` and `INFRA_PR_APP_PRIVATE_KEY` secrets for a GitHub App installed on `infra-shared` with Contents and Pull requests write access.
