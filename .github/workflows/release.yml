@@ -3,18 +3,34 @@ name: Release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to build and publish
+        required: true
+        type: string
 
 jobs:
-  build-and-upload:
+  build-publish-and-open-infra-pr:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+      ARTIFACT_BUCKET: hf-marketplace-fulfillment-artifacts-222369475058-use1
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
 
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+
+      - run: npm ci
+
+      - run: npm test
 
       - uses: aws-actions/setup-sam@v2
 
@@ -25,7 +41,53 @@ jobs:
         working-directory: .aws-sam/build/FulfillmentFunction
         run: zip -r "$GITHUB_WORKSPACE/lambda.zip" .
 
-      - name: Upload zip to release
+      - name: Upload zip to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" lambda.zip
+        run: gh release upload "$RELEASE_TAG" lambda.zip --clobber
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::222369475058:role/marketplace-fulfillment-artifact-publisher
+          role-session-name: publish-marketplace-lambda
+          aws-region: us-east-1
+
+      - name: Upload versioned artifact to S3
+        id: artifact
+        run: bash scripts/publish-lambda-artifact.sh
+
+      - name: Create infra-shared GitHub App token
+        id: infra-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.INFRA_PR_APP_ID }}
+          private-key: ${{ secrets.INFRA_PR_APP_PRIVATE_KEY }}
+          owner: hyperflowfinance
+          repositories: infra-shared
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Checkout infra-shared
+        uses: actions/checkout@v5
+        with:
+          repository: hyperflowfinance/infra-shared
+          token: ${{ steps.infra-token.outputs.token }}
+          path: infra-shared
+
+      - name: Update stage artifact pin
+        env:
+          VERSION_ID: ${{ steps.artifact.outputs.version_id }}
+          ARTIFACT_KEY: ${{ steps.artifact.outputs.key }}
+          ARTIFACT_SHA256: ${{ steps.artifact.outputs.sha256 }}
+        run: bash scripts/update-infra-artifact-pin.sh
+
+      - name: Open stage deployment PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ steps.infra-token.outputs.token }}
+          path: infra-shared
+          branch: deploy/marketplace-fulfillment-${{ env.RELEASE_TAG }}
+          delete-branch: true
+          title: Deploy Marketplace Fulfillment ${{ env.RELEASE_TAG }} to stage
+          body: Update the stage Lambda to the ZIP built from `${{ env.RELEASE_TAG }}`.
