@@ -95,5 +95,5 @@ jobs:
           path: infra-shared
           branch: deploy/marketplace-fulfillment-${{ env.RELEASE_TAG }}
           delete-branch: true
-          title: "${{ steps.pin.outputs.ticket_key }}: Deploy Marketplace Fulfillment ${{ env.RELEASE_TAG }} to stage - #121"
+          title: "${{ steps.pin.outputs.ticket_key }}: Deploy Marketplace Fulfillment ${{ env.RELEASE_TAG }} to stage"
           body: "${{ steps.pin.outputs.ticket_key }}: Update the stage Lambda to the ZIP built from `${{ env.RELEASE_TAG }}`."
