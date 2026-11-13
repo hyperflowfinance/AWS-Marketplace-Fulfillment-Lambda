@@ -34,6 +34,12 @@ mock.module("@aws-sdk/client-marketplace-entitlement-service", {
 // Enable test mode BEFORE importing handler
 process.env.REDIRECT_URL = "https://example.com/welcome";
 process.env.PRODUCT_CODE = "prod-test123";
+process.env.SIGNING_SECRET = "test-secret";
+
+// Decodes the claims from the signed token in the redirect fragment.
+const claims = (loc) =>
+  new Map(Object.entries(JSON.parse(Buffer.from(
+    new URLSearchParams(loc.hash.slice(1)).get("marketplace").split(".")[0], "base64url"))));
 process.env.ALLOW_TEST_MODE = "true";
 
 const { handler } = await import("../src/index.mjs");
@@ -55,9 +61,9 @@ describe("test mode (ALLOW_TEST_MODE=true)", () => {
     assert.equal(result._testMode, true);
 
     const location = new URL(result.headers.Location);
-    assert.equal(location.searchParams.get("customerId"), "test-customer-id");
-    assert.equal(location.searchParams.get("awsAccountId"), "123456789012");
-    assert.equal(location.searchParams.get("productCode"), "prod-test123");
+    assert.equal(claims(location).get("customerId"), "test-customer-id");
+    assert.equal(claims(location).get("awsAccountId"), "123456789012");
+    assert.equal(claims(location).get("productCode"), "prod-test123");
 
     // ResolveCustomer must NOT be called in test mode
     assert.equal(sendMeteringMock.mock.callCount(), 0);
@@ -79,9 +85,9 @@ describe("test mode (ALLOW_TEST_MODE=true)", () => {
 
     assert.equal(result.statusCode, 302);
     const location = new URL(result.headers.Location);
-    assert.equal(location.searchParams.get("customerId"), "my-custom-id");
-    assert.equal(location.searchParams.get("awsAccountId"), "999999999999");
-    assert.equal(location.searchParams.get("productCode"), "prod-custom");
+    assert.equal(claims(location).get("customerId"), "my-custom-id");
+    assert.equal(claims(location).get("awsAccountId"), "999999999999");
+    assert.equal(claims(location).get("productCode"), "prod-custom");
   });
 
   it("calls GetEntitlements with the provided customerId", async () => {

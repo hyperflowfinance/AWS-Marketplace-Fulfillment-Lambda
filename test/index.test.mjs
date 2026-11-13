@@ -35,6 +35,12 @@ mock.module("@aws-sdk/client-marketplace-entitlement-service", {
 // Set env vars before importing handler
 process.env.REDIRECT_URL = "https://example.com/welcome";
 process.env.PRODUCT_CODE = "prod-test123";
+process.env.SIGNING_SECRET = "test-secret";
+
+// Decodes the claims from the signed token in the redirect fragment.
+const claims = (loc) =>
+  new Map(Object.entries(JSON.parse(Buffer.from(
+    new URLSearchParams(loc.hash.slice(1)).get("marketplace").split(".")[0], "base64url"))));
 
 const { handler } = await import("../src/index.mjs");
 
@@ -90,9 +96,9 @@ describe("handler", () => {
 
     const location = new URL(result.headers.Location);
     assert.equal(location.origin + location.pathname, "https://example.com/welcome");
-    assert.equal(location.searchParams.get("customerId"), "cust-123");
-    assert.equal(location.searchParams.get("awsAccountId"), "111122223333");
-    assert.equal(location.searchParams.get("productCode"), "prod-test123");
+    assert.equal(claims(location).get("customerId"), "cust-123");
+    assert.equal(claims(location).get("awsAccountId"), "111122223333");
+    assert.equal(claims(location).get("productCode"), "prod-test123");
 
     assert.equal(sendMeteringMock.mock.callCount(), 1);
     assert.equal(sendEntitlementMock.mock.callCount(), 1);
@@ -116,7 +122,7 @@ describe("handler", () => {
 
     assert.equal(result.statusCode, 302);
     const location = new URL(result.headers.Location);
-    assert.equal(location.searchParams.get("customerId"), "cust-b64");
+    assert.equal(claims(location).get("customerId"), "cust-b64");
   });
 
   // ---- No entitlements ----
@@ -204,12 +210,12 @@ describe("handler", () => {
     assert.equal(result.statusCode, 302);
     const location = new URL(result.headers.Location);
     // All three params must be present for the downstream app to onboard the customer
-    assert.ok(location.searchParams.has("customerId"));
-    assert.ok(location.searchParams.has("awsAccountId"));
-    assert.ok(location.searchParams.has("productCode"));
-    assert.equal(location.searchParams.get("customerId"), "cust-onboard");
-    assert.equal(location.searchParams.get("awsAccountId"), "999988887777");
-    assert.equal(location.searchParams.get("productCode"), "prod-test123");
+    assert.ok(claims(location).has("customerId"));
+    assert.ok(claims(location).has("awsAccountId"));
+    assert.ok(claims(location).has("productCode"));
+    assert.equal(claims(location).get("customerId"), "cust-onboard");
+    assert.equal(claims(location).get("awsAccountId"), "999988887777");
+    assert.equal(claims(location).get("productCode"), "prod-test123");
   });
 
   // ---- Scenario 4: GetEntitlements returns undefined Entitlements array ----
@@ -327,7 +333,7 @@ describe("handler", () => {
 
     assert.equal(result.statusCode, 302);
     const location = new URL(result.headers.Location);
-    assert.equal(location.searchParams.get("customerId"), "cust-mixed");
+    assert.equal(claims(location).get("customerId"), "cust-mixed");
   });
 
   // ---- Test mode: disabled when ALLOW_TEST_MODE is not "true" ----
@@ -358,5 +364,21 @@ describe("handler", () => {
     const input = call.arguments[0].input;
     assert.equal(input.ProductCode, "prod-test123");
     assert.deepEqual(input.Filter, { CUSTOMER_IDENTIFIER: ["cust-verify"] });
+  });
+});
+
+describe("signToken", () => {
+  it("signs claims with HMAC-SHA256 and a 1h expiry", async () => {
+    const { signToken } = await import("../src/index.mjs");
+    const { createHmac } = await import("node:crypto");
+    const [payload, sig] = signToken({ customerId: "c" }, "k").split(".");
+    assert.equal(sig, createHmac("sha256", "k").update(payload).digest("base64url"));
+    const exp = JSON.parse(Buffer.from(payload, "base64url")).exp;
+    assert.ok(Math.abs(exp - (Date.now() / 1000 + 3600)) < 5);
+  });
+
+  it("refuses to sign without a secret", async () => {
+    const { signToken } = await import("../src/index.mjs");
+    assert.throws(() => signToken({ customerId: "c" }, ""), /SIGNING_SECRET/);
   });
 });
