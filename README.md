@@ -16,7 +16,8 @@ Handles the fulfillment redirect when a customer subscribes to your SaaS product
 | -------------- | -------------------------------------------------------- |
 | `REDIRECT_URL` | URL to redirect customer to after successful fulfillment |
 | `PRODUCT_CODE` | Your AWS Marketplace product code                        |
-| `SIGNING_SECRET` | HMAC secret; must equal dashboard-api `MARKETPLACE_TOKEN_SECRET` |
+| `MARKETPLACE_TOKEN_SECRET_NAME` | Secrets Manager name shared with dashboard-api |
+| `MARKETPLACE_TOKEN_SECRET_REGION` | Region where that secret lives |
 | `ALLOW_TEST_MODE` | `true` enables direct-invoke test mode; keep `false` in prod |
 
 ## Build and Deploy
@@ -28,6 +29,7 @@ The release workflow runs tests, builds the SAM package, and publishes the ZIP. 
 The SAM template grants the Lambda these permissions:
 - `aws-marketplace:ResolveCustomer`
 - `aws-marketplace:GetEntitlements`
+- `secretsmanager:GetSecretValue` for the shared token secret only
 
 ## Release to Stage
 

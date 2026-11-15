@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 // --- Stubs for AWS SDK clients ---
 const sendMeteringMock = mock.fn();
 const sendEntitlementMock = mock.fn();
+const sendSecretMock = mock.fn(async () => ({ SecretString: "test-secret" }));
 
 // Mock the SDK modules before importing the handler
 mock.module("@aws-sdk/client-marketplace-metering", {
@@ -32,10 +33,24 @@ mock.module("@aws-sdk/client-marketplace-entitlement-service", {
   },
 });
 
+mock.module("@aws-sdk/client-secrets-manager", {
+  namedExports: {
+    SecretsManagerClient: class {
+      send = sendSecretMock;
+    },
+    GetSecretValueCommand: class {
+      constructor(input) {
+        this.input = input;
+      }
+    },
+  },
+});
+
 // Set env vars before importing handler
 process.env.REDIRECT_URL = "https://example.com/welcome";
 process.env.PRODUCT_CODE = "prod-test123";
-process.env.SIGNING_SECRET = "test-secret";
+process.env.MARKETPLACE_TOKEN_SECRET_NAME = "controlplane-staging/marketplace-token-secret";
+process.env.MARKETPLACE_TOKEN_SECRET_REGION = "eu-central-1";
 
 // Decodes the claims from the signed token in the redirect fragment.
 const claims = (loc) =>
@@ -93,6 +108,8 @@ describe("handler", () => {
     );
 
     assert.equal(result.statusCode, 302);
+    assert.equal(sendSecretMock.mock.calls[0].arguments[0].input.SecretId,
+      "controlplane-staging/marketplace-token-secret");
 
     const location = new URL(result.headers.Location);
     assert.equal(location.origin + location.pathname, "https://example.com/welcome");
@@ -379,6 +396,6 @@ describe("signToken", () => {
 
   it("refuses to sign without a secret", async () => {
     const { signToken } = await import("../src/index.mjs");
-    assert.throws(() => signToken({ customerId: "c" }, ""), /SIGNING_SECRET/);
+    assert.throws(() => signToken({ customerId: "c" }, ""), /signing secret/);
   });
 });
