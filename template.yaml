@@ -14,10 +14,12 @@ Parameters:
     Default: "false"
     AllowedValues: ["true", "false"]
     Description: Set to true to enable direct-invoke test mode (do not enable in production)
-  SigningSecret:
+  MarketplaceTokenSecretName:
     Type: String
-    NoEcho: true
-    Description: HMAC secret shared with dashboard-api (MARKETPLACE_TOKEN_SECRET)
+    Description: Secrets Manager secret name shared with dashboard-api
+  MarketplaceTokenSecretRegion:
+    Type: String
+    Description: Region containing the shared Marketplace token secret
 
 Globals:
   Function:
@@ -36,7 +38,8 @@ Resources:
           REDIRECT_URL: !Ref RedirectUrl
           PRODUCT_CODE: !Ref ProductCode
           ALLOW_TEST_MODE: !Ref AllowTestMode
-          SIGNING_SECRET: !Ref SigningSecret
+          MARKETPLACE_TOKEN_SECRET_NAME: !Ref MarketplaceTokenSecretName
+          MARKETPLACE_TOKEN_SECRET_REGION: !Ref MarketplaceTokenSecretRegion
       Policies:
         - Version: "2012-10-17"
           Statement:
@@ -48,6 +51,10 @@ Resources:
               Action:
                 - aws-marketplace:GetEntitlements
               Resource: "*"
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Sub "arn:aws:secretsmanager:${MarketplaceTokenSecretRegion}:${AWS::AccountId}:secret:${MarketplaceTokenSecretName}-*"
       Events:
         MarketplacePost:
           Type: Api

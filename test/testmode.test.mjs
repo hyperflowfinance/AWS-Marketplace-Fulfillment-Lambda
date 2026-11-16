@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 // --- Stubs for AWS SDK clients ---
 const sendMeteringMock = mock.fn();
 const sendEntitlementMock = mock.fn();
+const sendSecretMock = mock.fn(async () => ({ SecretString: "test-secret" }));
 
 mock.module("@aws-sdk/client-marketplace-metering", {
   namedExports: {
@@ -31,10 +32,24 @@ mock.module("@aws-sdk/client-marketplace-entitlement-service", {
   },
 });
 
+mock.module("@aws-sdk/client-secrets-manager", {
+  namedExports: {
+    SecretsManagerClient: class {
+      send = sendSecretMock;
+    },
+    GetSecretValueCommand: class {
+      constructor(input) {
+        this.input = input;
+      }
+    },
+  },
+});
+
 // Enable test mode BEFORE importing handler
 process.env.REDIRECT_URL = "https://example.com/welcome";
 process.env.PRODUCT_CODE = "prod-test123";
-process.env.SIGNING_SECRET = "test-secret";
+process.env.MARKETPLACE_TOKEN_SECRET_NAME = "controlplane-staging/marketplace-token-secret";
+process.env.MARKETPLACE_TOKEN_SECRET_REGION = "eu-central-1";
 
 // Decodes the claims from the signed token in the redirect fragment.
 const claims = (loc) =>

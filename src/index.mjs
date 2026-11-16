@@ -3,6 +3,7 @@ import {
   MarketplaceEntitlementServiceClient,
   GetEntitlementsCommand,
 } from "@aws-sdk/client-marketplace-entitlement-service";
+import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { parse } from "querystring";
 import { createHmac } from "crypto";
 
@@ -12,9 +13,30 @@ const entitlementClient = new MarketplaceEntitlementServiceClient({});
 const REDIRECT_URL = process.env.REDIRECT_URL;
 const PRODUCT_CODE = process.env.PRODUCT_CODE;
 const ALLOW_TEST_MODE = process.env.ALLOW_TEST_MODE === "true";
-// Shared with dashboard-api (MARKETPLACE_TOKEN_SECRET); signs the redirect token.
-const SIGNING_SECRET = process.env.SIGNING_SECRET;
+const MARKETPLACE_TOKEN_SECRET_NAME = process.env.MARKETPLACE_TOKEN_SECRET_NAME;
+const MARKETPLACE_TOKEN_SECRET_REGION = process.env.MARKETPLACE_TOKEN_SECRET_REGION;
+const secretsClient = new SecretsManagerClient({ region: MARKETPLACE_TOKEN_SECRET_REGION });
 const TOKEN_TTL_SECONDS = 3600;
+let signingSecretPromise;
+
+async function getSigningSecret() {
+  if (!MARKETPLACE_TOKEN_SECRET_NAME || !MARKETPLACE_TOKEN_SECRET_REGION) {
+    throw new Error("Marketplace token secret name and region are not configured");
+  }
+  if (!signingSecretPromise) {
+    signingSecretPromise = secretsClient
+      .send(new GetSecretValueCommand({ SecretId: MARKETPLACE_TOKEN_SECRET_NAME }))
+      .then(({ SecretString }) => {
+        if (!SecretString) throw new Error("Marketplace token secret is empty");
+        return SecretString;
+      })
+      .catch((error) => {
+        signingSecretPromise = undefined;
+        throw error;
+      });
+  }
+  return signingSecretPromise;
+}
 
 /**
  * AWS Marketplace SaaS Contract Fulfillment Lambda
@@ -55,7 +77,10 @@ export const handler = async (event) => {
       const entitlements = entitlementResult.Entitlements || [];
       console.log(`Found ${entitlements.length} entitlement(s)`, JSON.stringify(entitlements));
 
-      return { ...redirect({ customerId, awsAccountId, productCode }), _testMode: true };
+      return {
+        ...redirect({ customerId, awsAccountId, productCode }, await getSigningSecret()),
+        _testMode: true,
+      };
     }
 
     // --- 1. Extract the marketplace token from the POST body ---
@@ -113,7 +138,7 @@ export const handler = async (event) => {
 
     // --- 4. Redirect to the configured URL ---
     console.log("Redirecting customer", customerId);
-    return redirect({ customerId, awsAccountId, productCode });
+    return redirect({ customerId, awsAccountId, productCode }, await getSigningSecret());
   } catch (err) {
     console.error("Fulfillment error:", err);
 
@@ -126,17 +151,17 @@ export const handler = async (event) => {
 };
 
 /** HMAC-SHA256 token: base64url(JSON claims) + "." + base64url(signature). */
-export function signToken(claims, secret = SIGNING_SECRET) {
-  if (!secret) throw new Error("SIGNING_SECRET is not configured");
+export function signToken(claims, secret) {
+  if (!secret) throw new Error("A signing secret is required");
   const exp = Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS;
   const payload = Buffer.from(JSON.stringify({ ...claims, exp })).toString("base64url");
   const sig = createHmac("sha256", secret).update(payload).digest("base64url");
   return `${payload}.${sig}`;
 }
 
-function redirect(claims) {
+function redirect(claims, secret) {
   const target = new URL(REDIRECT_URL);
-  target.hash = `marketplace=${signToken(claims)}`;
+  target.hash = `marketplace=${signToken(claims, secret)}`;
   return { statusCode: 302, headers: { Location: target.toString() }, body: "" };
 }
 
