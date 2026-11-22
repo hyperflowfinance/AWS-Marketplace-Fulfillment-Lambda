@@ -33,8 +33,16 @@ The SAM template grants the Lambda these permissions:
 
 ## Release to Stage
 
-Publishing a `v*` GitHub Release runs tests, builds `lambda.zip`, publishes it to the release and to the versioned stage artifact bucket, then opens a PR in `infra-shared` updating the stage artifact pin. Merge that PR and deploy the `marketplace-fulfillment` component in `stage/us-east-1` to release the code.
+Push a `vX.Y.Z` tag on reviewed `main`. The Release workflow tests/builds `lambda.zip`,
+uploads it to the versioned stage S3 bucket, and publishes its exact version/checksum.
+The shared release workflow opens the stage-only infra PR, validates and applies a
+saved artifact-only plan, verifies the running Lambda checksum, then merges the PR.
+No per-version approval is needed. Production and engineering PR reviews are unchanged.
 
-Include a valid ticket key such as `DO-123` in release notes, or provide it in the Release workflow's `ticket_key` input when running manually. The workflow adds the key to both the PR title and body.
+Complete the [one-time stage release setup](https://github.com/hyperflowfinance/infra-shared/blob/main/docs/stage-releases.md)
+first. Infra polls successful tagged builds every five minutes. No new source secret
+is needed; merge credentials stay in infra's main-only `stage-release` environment.
 
-To publish an existing release, run the **Release** workflow manually with its tag after the artifact bucket is provisioned. The workflow needs `INFRA_PR_APP_ID` and `INFRA_PR_APP_PRIVATE_KEY` secrets for a GitHub App installed on `infra-shared` with Contents and Pull requests write access.
+Manual publishing still uploads an asset to an existing GitHub Release. Select its
+tag as the workflow ref and provide the matching `release_tag` for automatic stage.
+Creating a GitHub Release is not required for normal tag-triggered deployments.

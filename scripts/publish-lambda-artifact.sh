@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-[[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+[[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]] || {
+  echo "::error::Expected a version tag such as v1.2.3"; exit 1;
+}
 key="AWS-Marketplace-Fulfillment-Lambda/${RELEASE_TAG}/lambda.zip"
 result=$(aws s3api put-object \
   --bucket "$ARTIFACT_BUCKET" \
