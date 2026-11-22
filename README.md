@@ -35,13 +35,13 @@ The SAM template grants the Lambda these permissions:
 
 Push a `vX.Y.Z` tag on reviewed `main`. The Release workflow tests/builds `lambda.zip`,
 uploads it to the versioned stage S3 bucket, and publishes its exact version/checksum.
-The shared release workflow opens the stage-only infra PR, validates and applies a
+The shared release workflow authorizes FAST_STAGE, opens the stage-only infra PR, validates and applies a
 saved artifact-only plan, verifies the running Lambda checksum, then merges the PR.
 No per-version approval is needed. Production and engineering PR reviews are unchanged.
 
 Complete the [one-time stage release setup](https://github.com/hyperflowfinance/infra-shared/blob/main/docs/stage-releases.md)
 first. Infra polls successful tagged builds every five minutes. No new source secret
-is needed; merge credentials stay in infra's main-only `stage-release` environment.
+is needed; infra reuses the installed `prod-promote` App, only from its `main` workflow.
 
 Manual publishing still uploads an asset to an existing GitHub Release. Select its
 tag as the workflow ref and provide the matching `release_tag` for automatic stage.
